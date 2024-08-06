@@ -22,7 +22,6 @@
     "@types/node": "^16.18.14",
     "@types/react": "^18.0.28",
     "@types/react-dom": "^18.0.11",
-    "@types/three": "^0.149.0",
     "buffer": "^6.0.3",
     "googleapis": "^114.0.0",
     "import-http": "^0.3.1",
@@ -36,7 +35,7 @@
     "react-scripts": "5.0.1",
     "safevalues": "^0.3.1",
     "speech-synthesis-recorder": "^1.2.1",
-    "three": "^0.166.0",
+    "three": "^0.167.1",
     "tone": "^14.7.77",
     "web-vitals": "^2.1.4"
   },
@@ -66,6 +65,7 @@
   },
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@types/three": "^0.167.1",
     "typescript": "^5.5.3"
   }
 }

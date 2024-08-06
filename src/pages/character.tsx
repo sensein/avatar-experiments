@@ -14,316 +14,235 @@
  * limitations under the License.
  */
 
-import React, { useEffect, useState, useRef } from 'react';
-import { Box, AppBar, Toolbar, IconButton, Typography } from '@mui/material';
-import { CloseOutlined, KeyboardVoiceOutlined, Pause, MicOffOutlined } from '@mui/icons-material';
+import React, { useState, useRef, useEffect } from 'react';
+import { Box, IconButton, Typography, Button } from '@mui/material';
+import { Close as CloseIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import useLanguageModel from '../apis/languageModel';
-import useSpeechRecognition, { CharacterState } from '../apis/speechRecognition';
-import useTextToSpeech from '../apis/textToSpeech';
+import { Canvas } from '@react-three/fiber';
+import { OrbitControls, Environment, PerspectiveCamera } from '@react-three/drei';
 import useStyle, { COLORS } from './styles';
 import { useAvatar } from '../context/AvatarContext';
-import ReadyPlayerMeAvatar, { ReadyPlayerMeAvatarRef } from '../components/ReadyPlayerMeAvatar';
-import AnimationPanel from './AnimationPanel';
-
-const animationCategories = {
-  dance: [
-    'F_Dances_001', 'F_Dances_004', 'F_Dances_005', 'F_Dances_006', 'F_Dances_007',
-    'M_Dances_001', 'M_Dances_002', 'M_Dances_003', 'M_Dances_004', 'M_Dances_005',
-    'M_Dances_006', 'M_Dances_007', 'M_Dances_008', 'M_Dances_009', 'M_Dances_011'
-  ],
-  expression: [
-    'F_Talking_Variations_001', 'F_Talking_Variations_002', 'F_Talking_Variations_003',
-    'F_Talking_Variations_004', 'F_Talking_Variations_005', 'F_Talking_Variations_006',
-    'M_Standing_Expressions_001', 'M_Standing_Expressions_002', 'M_Standing_Expressions_004',
-    'M_Standing_Expressions_005', 'M_Standing_Expressions_007', 'M_Standing_Expressions_008',
-    'M_Standing_Expressions_009', 'M_Standing_Expressions_010', 'M_Standing_Expressions_011',
-    'M_Standing_Expressions_012', 'M_Standing_Expressions_013', 'M_Standing_Expressions_014',
-    'M_Standing_Expressions_015', 'M_Standing_Expressions_016', 'M_Standing_Expressions_017',
-    'M_Standing_Expressions_018', 'M_Talking_Variations_001', 'M_Talking_Variations_002',
-    'M_Talking_Variations_003', 'M_Talking_Variations_004', 'M_Talking_Variations_005',
-    'M_Talking_Variations_006', 'M_Talking_Variations_007', 'M_Talking_Variations_008',
-    'M_Talking_Variations_009', 'M_Talking_Variations_010'
-  ],
-  idle: [
-    'F_Standing_Idle_001', 'F_Standing_Idle_Variations_001', 'F_Standing_Idle_Variations_002',
-    'F_Standing_Idle_Variations_003', 'F_Standing_Idle_Variations_004', 'F_Standing_Idle_Variations_005',
-    'F_Standing_Idle_Variations_006', 'F_Standing_Idle_Variations_007', 'F_Standing_Idle_Variations_008',
-    'F_Standing_Idle_Variations_009', 'M_Standing_Idle_001', 'M_Standing_Idle_Variations_001',
-    'M_Standing_Idle_Variations_002', 'M_Standing_Idle_Variations_003', 'M_Standing_Idle_Variations_004',
-    'M_Standing_Idle_Variations_005', 'M_Standing_Idle_Variations_006', 'M_Standing_Idle_Variations_007',
-    'M_Standing_Idle_Variations_008', 'M_Standing_Idle_Variations_009', 'M_Standing_Idle_Variations_010'
-  ],
-  locomotion: [
-    'F_Crouch_Strafe_Left', 'F_Crouch_Strafe_Right', 'F_Crouch_Walk_001', 'F_CrouchedWalk_Backwards_001',
-    'F_Falling_Idle_000', 'F_Falling_Idle_001', 'F_Jog_001', 'F_Jog_Backwards_001', 'F_Jog_Jump_Small_001',
-    'F_Jog_Strafe_Left_001', 'F_Jog_Strafe_Right_001', 'F_Run_001', 'F_Run_Backwards_001', 'F_Run_Jump_001',
-    'F_Run_Strafe_Left_001', 'F_Run_Strafe_Right_001', 'F_Walk_Backwards_001', 'F_Walk_Jump_001',
-    'F_Walk_Strafe_Left_001', 'F_Walk_Strafe_Right_001', 'M_Crouch_Strafe_Left_002', 'M_Crouch_Strafe_Right_002',
-    'M_Crouch_Walk_003', 'M_CrouchedWalk_Backwards_002', 'M_Jog_Jump_001', 'M_Jog_Jump_002', 'M_Run_Jump_001',
-    'M_Walk_Jump_001', 'M_Walk_Jump_002', 'M_Walk_Strafe_Left_002', 'M_Walk_Strafe_Right_002'
-  ]
-};
+import Avatar from '../components/Avatar';
+import AnimationPreview from '../components/AnimationPreview';
 
 const Character: React.FC = () => {
   const navigate = useNavigate();
-  const { sendMessage } = useLanguageModel();
-  const {
-    characterState,
-    bars,
-    setCharacterState,
-    onMicButtonPressed,
-    setOnSpeechFoundCallback,
-  } = useSpeechRecognition();
-  const { convert, setOnProcessCallback } = useTextToSpeech();
-  const { avatarUrl } = useAvatar();
-  const [transcript, setTranscript] = useState<String[]>(['You', '']);
   const { boxWidth } = useStyle();
+  const { avatarUrl } = useAvatar();
   const [currentAnimation, setCurrentAnimation] = useState<string | null>(null);
-  const avatarRef = useRef<ReadyPlayerMeAvatarRef>(null);
+  const [currentLipsyncAudio, setCurrentLipsyncAudio] = useState<string | null>(null);
+  const [isLipsyncPlaying, setIsLipsyncPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  useEffect(() => {
-    setOnProcessCallback((audioData: Float32Array) => {
-      // Handle audio processing if needed
-    });
-    setOnSpeechFoundCallback((transcription: string) => {
-      setTranscript(['You', transcription]);
-      sendMessage(transcription).then((result) => {
-        setTranscript(['AI tutor', result]);
-        convert(result).then(() => {
-          setCharacterState(CharacterState.Idle);
-        });
-      });
-    });
+  const animations = [
+    '/animations/expression/F_Talking_Variations_001.glb',
+    '/animations/expression/F_Talking_Variations_002.glb',
+    '/animations/expression/F_Talking_Variations_004.glb',
+    '/animations/expression/F_Talking_Variations_005.glb',
+    '/animations/expression/F_Talking_Variations_006.glb',
+    '/animations/dance/F_Dances_001.glb',
+    '/animations/dance/F_Dances_005.glb',
+    '/animations/dance/F_Dances_006.glb',
+  ];
 
-    // Set random idle animation on load
-    const randomIdleAnimation = animationCategories.idle[Math.floor(Math.random() * animationCategories.idle.length)];
-    setCurrentAnimation(`/animations/idle/${randomIdleAnimation}.fbx`);
-  }, []);
+  const lipsyncAudios = [
+    '/audio/TestAudio1.mp3',
+    '/audio/TestAudio2.mp3',
+    '/audio/TestAudio3.mp3',
+    '/audio/TestAudio4.mp3',
+  ];
+
+  const handleSelectAnimation = (animationUrl: string) => {
+    setCurrentAnimation(animationUrl);
+  };
 
   const handleExitButtonClick = () => {
     navigate('/exit');
-    sessionStorage.setItem("usePalmApi", "false");
-    sessionStorage.setItem("useGoogleApi", "false");
   };
 
-  const handleSelectAnimation = (category: string, animation: string) => {
-    const newAnimationSrc = `/animations/${category}/${animation}.fbx`;
-    setCurrentAnimation(newAnimationSrc);
-    if (avatarRef.current) {
-      avatarRef.current.setAnimation(newAnimationSrc);
+  const handleLipsyncButtonClick = (audioUrl: string) => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+
+    if (currentLipsyncAudio === audioUrl && isLipsyncPlaying) {
+      setIsLipsyncPlaying(false);
+      setCurrentLipsyncAudio(null);
+    } else {
+      setCurrentLipsyncAudio(audioUrl);
+      setIsLipsyncPlaying(true);
+      
+      audioRef.current = new Audio(audioUrl);
+      audioRef.current.addEventListener('ended', () => {
+        setIsLipsyncPlaying(false);
+        setCurrentLipsyncAudio(null);
+      });
+      audioRef.current.play().catch(error => console.error('Error playing audio:', error));
     }
   };
 
-  const characterStateIcon = {
-    [CharacterState.Idle]: (
-      <IconButton
-        className="shadow-box"
-        onClick={onMicButtonPressed}
-        aria-label="Start Recording"
-        sx={{
-          width: '10vh',
-          height: '10vh',
-          marginTop: '30px',
-          padding: '16px',
-          borderRadius: '50%',
-          color: COLORS.primary,
-          backgroundColor: COLORS.bgcolor,
-          '&:hover': {
-            backgroundColor: COLORS.bgcolor,
-            '@media (hover: none)': {
-              backgroundColor: COLORS.bgcolor,
-            },
-          },
-        }}>
-        <KeyboardVoiceOutlined sx={{fontSize: '40px'}} />
-      </IconButton>
-    ),
-    [CharacterState.Listening]: (
-      <IconButton
-        className="shadow-box"
-        onClick={onMicButtonPressed}
-        color="error"
-        aria-label="Stop Recording"
-        sx={{
-          width: '10vh',
-          height: '10vh',
-          marginTop: '30px',
-          padding: '16px',
-          borderRadius: '50%',
-          backgroundColor: COLORS.bgcolor,
-          '&:hover': {
-            backgroundColor: COLORS.bgcolor,
-            '@media (hover: none)': {
-              backgroundColor: COLORS.bgcolor,
-            },
-          },
-        }}>
-        <Pause sx={{fontSize: '40px'}} />
-      </IconButton>
-    ),
-    [CharacterState.Speaking]: (
-      <IconButton
-        className="shadow-box"
-        onClick={onMicButtonPressed}
-        color="default"
-        aria-label="Recording Disabled"
-        sx={{
-          width: '10vh',
-          height: '10vh',
-          marginTop: '30px',
-          padding: '16px',
-          borderRadius: '50%',
-          backgroundColor: 'grey.400',
-          '&:hover': {
-            backgroundColor: 'grey.500',
-            '@media (hover: none)': {
-              backgroundColor: 'grey.400',
-            },
-          },
-        }}>
-        <MicOffOutlined sx={{fontSize: '40px'}} />
-      </IconButton>
-    ),
-  };
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+    };
+  }, []);
 
   return (
     <Box
       component="div"
       sx={{
         display: 'flex',
-        flexDirection: 'row',
-        minHeight: '100vh',
+        flexDirection: 'column',
+        height: '100vh',
+        width: '100vw',
         bgcolor: COLORS.bgcolor,
+        position: 'relative',
       }}>
-      <Box
-        component="div"
+      <IconButton
+        onClick={handleExitButtonClick}
         sx={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          paddingLeft: '5vh',
-          paddingRight: '5vh',
-        }}>
-        <AppBar
-          position="static"
-          color="transparent"
-          elevation={0}
-          sx={{width: boxWidth, alignSelf: 'center'}}>
-          <Toolbar className="tool-bar">
-            <Box component="div"
-                className="shadow-back-button"
-                sx={{justifyContent: 'center', color: COLORS.bgcolor, marginRight: '1vh'}}>
-              <IconButton 
-              onClick={handleExitButtonClick}
-              sx={{
-              fontSize: '3vh',
-              color: COLORS.primary,}}>
-              <CloseOutlined
-                sx={{fontSize: '3vh', color: COLORS.primary}}
-              />
-              </IconButton>
-            </Box>
-          </Toolbar>
-        </AppBar>
+          position: 'absolute',
+          top: '10px',
+          left: '10px',
+          color: COLORS.primary,
+          bgcolor: 'rgba(255, 255, 255, 0.8)',
+          '&:hover': {
+            bgcolor: 'rgba(255, 255, 255, 1)',
+          },
+        }}
+      >
+        <CloseIcon />
+      </IconButton>
 
-        <Box
-          component="div"
-          sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            textAlign: 'center',
-            flexDirection: 'column',
-            position: 'relative',
-          }}>
+      <Box sx={{ display: 'flex', flexDirection: 'row', flex: 1, overflow: 'hidden' }}>
+        {/* Main content area */}
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '0 2vh' }}>
           <Box
             component="div"
             className="shadow-box"
             sx={{
-              width: boxWidth,
-              height: '40vh',
-              boxSizing: 'border-box',
-              overflow: 'hidden',
-              margin: '0 0 2vh 0',
+              width: '65%',
+              aspectRatio: '4/3',
+              margin: '2vh auto',
               bgcolor: '#FFFFFF',
+              borderRadius: '20px',
+              overflow: 'hidden',
+              boxShadow: '0 0 10px rgba(0,0,0,0.1)',
+              border: '1px solid #e0e0e0',
             }}>
-            {avatarUrl ? (
-              <ReadyPlayerMeAvatar
-                ref={avatarRef}
-                avatarUrl={avatarUrl}
-                animationSrc={currentAnimation}
+            <Canvas shadows>
+              <PerspectiveCamera makeDefault position={[0, 1.5, 3]} fov={50} />
+              <color attach="background" args={['#f0f0f0']} />
+
+              <spotLight
+                position={[3, 3, 3]}
+                angle={0.6}
+                penumbra={1}
+                intensity={0.5}
+                castShadow
+                shadow-mapSize-width={1024}
+                shadow-mapSize-height={1024}
+                color="#faf0e6"
               />
-            ) : (
-              <Typography>No avatar created yet</Typography>
-            )}
-          </Box>
+              <pointLight position={[-3, 2, 0]} intensity={0.3} color="#e6f0fa" />
+              <pointLight position={[0, 2, -3]} intensity={0.2} color="#f0fae6" />
+              <ambientLight intensity={0.4} />
 
-          <Box
-            component="div"
-            sx={{
-              width: boxWidth,
-              textAlign: 'left',
-              boxSizing: 'content-box',
-              overflow: 'hidden',
-            }}>
-            <Typography>{transcript[0]}</Typography>
-          </Box>
-          <Box
-            component="div"
-            className="shadow-box"
-            sx={{
-              width: boxWidth,
-              height: '15vh',
-              verticalAlign: 'middle',
-              boxSizing: 'content-box',
-              margin: '2vh 0',
-              bgcolor: '#FFFFFF',
-            }}>
-            <Typography
-              style={{ color: COLORS.primary }}
-              sx={{
-                padding: '0.8vh',
-                margin: '1.2vh',
-                textAlign: 'left',
-                height: '11vh',
-                overflow: 'scroll',
-                '&::-webkit-scrollbar': {
-                  width: '1.5px',
-                  height: '0',
-                },
-                '&::-webkit-scrollbar-thumb': {
-                  background: '#AAA',
-                  borderRadius: '0.7px',
-                },
-                borderRadius: '4vh',
-                fontFamily: 'Google Sans, sans-serif',
-                fontSize: '14px',
-              }}>
-              {transcript[1]}
-            </Typography>
-          </Box>
+              <Avatar 
+                avatarUrl={avatarUrl} 
+                currentAnimation={currentAnimation} 
+                currentLipsyncAudio={currentLipsyncAudio}
+                isLipsyncPlaying={isLipsyncPlaying}
+              />
+              
+              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]} receiveShadow>
+                <planeGeometry args={[20, 20]} />
+                <shadowMaterial transparent opacity={0.1} />
+              </mesh>
 
-          <Box
-            component="div"
-            sx={{
-              justifyContent: 'center',
-              paddingTop: '2vh',
-              transform: 'translate(15px, -30px)',
-            }}>
-            {characterStateIcon[characterState]}
-            <Box component="div" className={`bar-container ${characterState != CharacterState.Listening ? 'hidden' : ''}`}>
-              <Box component="div" ref={(el: HTMLDivElement | null) => (bars.current[0] = el)} className="bar" />
-              <Box component="div" ref={(el: HTMLDivElement | null) => (bars.current[1] = el)} className="bar middle" />
-              <Box component="div" ref={(el: HTMLDivElement | null) => (bars.current[2] = el)} className="bar" />
-            </Box>
+              <OrbitControls enablePan={false} enableZoom={false} enableRotate={false} target={[0,1.4,0]} />
+              <Environment preset="warehouse" />
+            </Canvas>
+          </Box>
+        </Box>
+
+        {/* Animation preview column */}
+        <Box sx={{ width: '300px', height: '100%', borderLeft: '1px solid #ccc', padding: '20px', overflowY: 'auto' }}>
+          <Typography variant="h6" gutterBottom>
+            Animations
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {animations.map((animationUrl, index) => (
+              <Box
+                key={index}
+                onClick={() => handleSelectAnimation(animationUrl)}
+                sx={{
+                  width: '100%',
+                  height: '250px',
+                  cursor: 'pointer',
+                  '&:hover': { opacity: 0.8 },
+                  border: '1px solid #ccc',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
+                }}
+              >
+                <Canvas camera={{ position: [0, 1.3, 1.2] }}>
+                  <color attach="background" args={['#f0f0f0']} />
+                  <AnimationPreview
+                    avatarUrl={avatarUrl}
+                    animationUrl={animationUrl}
+                    onSelect={handleSelectAnimation}
+                  />
+                  <OrbitControls enableZoom={false} enablePan={false} target={[0,1.4,0]} />
+                  <Environment preset="warehouse" />
+                </Canvas>
+              </Box>
+            ))}
           </Box>
         </Box>
       </Box>
-      <AnimationPanel
-        categories={animationCategories}
-        onSelectAnimation={handleSelectAnimation}
-      />
+
+      {/* Bottom panel for lipsync controls */}
+      <Box
+        sx={{
+          width: '100%',
+          height: '150px',
+          borderTop: '1px solid #ccc',
+          padding: '20px',
+          bgcolor: '#f5f5f5',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}
+      >
+        <Typography variant="h6" gutterBottom>
+          Lipsync Controls
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+          {lipsyncAudios.map((audioUrl, index) => (
+            <Button
+              key={index}
+              variant="contained"
+              onClick={() => handleLipsyncButtonClick(audioUrl)}
+              sx={{
+                borderRadius: '20px',
+                padding: '10px 20px',
+                backgroundColor: currentLipsyncAudio === audioUrl && isLipsyncPlaying ? '#4CAF50' : '#2196F3',
+                '&:hover': {
+                  backgroundColor: currentLipsyncAudio === audioUrl && isLipsyncPlaying ? '#45a049' : '#1976D2',
+                },
+              }}
+            >
+              {currentLipsyncAudio === audioUrl && isLipsyncPlaying ? 'Stop' : `Play Audio ${index + 1}`}
+            </Button>
+          ))}
+        </Box>
+      </Box>
     </Box>
   );
 };
