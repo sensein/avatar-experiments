@@ -1,2 +1,3 @@
-cd /d C:\Users\HomePC\Desktop\MIT\Test\syncing
+@echo off
+cd /d "%~dp0"
 npm start
