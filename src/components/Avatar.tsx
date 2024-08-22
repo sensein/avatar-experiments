@@ -3,12 +3,19 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
-const Avatar: React.FC<{
+interface AvatarProps {
   avatarUrl: string;
   currentAnimation: string | null;
   currentLipsyncAudio: string | null;
   isLipsyncPlaying: boolean;
-}> = ({ avatarUrl, currentAnimation, currentLipsyncAudio, isLipsyncPlaying }) => {
+}
+
+interface AnimationLoopEvent extends THREE.Event {
+  action: THREE.AnimationAction;
+  loopDelta: number;
+}
+
+const Avatar: React.FC<AvatarProps> = ({ avatarUrl, currentAnimation, currentLipsyncAudio, isLipsyncPlaying }) => {
   const [avatar, setAvatar] = useState<THREE.Group | null>(null);
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
   const currentActionRef = useRef<THREE.AnimationAction | null>(null);
@@ -73,7 +80,7 @@ const Avatar: React.FC<{
         newAction.clampWhenFinished = true;
         newAction.loop = THREE.LoopOnce;
 
-        const onLoopFinished = (e: any) => {
+        const onLoopFinished = (e: AnimationLoopEvent) => {
           if (e.action === newAction) {
             if (idleActionRef.current) {
               newAction.crossFadeTo(idleActionRef.current, 0.5, true);
@@ -137,6 +144,9 @@ const Avatar: React.FC<{
     'H': ['viseme_TH'],
   };
 
+  // List of visemes that require teeth movement
+  const teethMovingVisemes = ['viseme_aa', 'viseme_E', 'viseme_I', 'viseme_O', 'viseme_U'];
+
   const resetToNeutralExpression = () => {
     const shapes = Object.values(visemeToBlendShape).flat();
     const values = new Array(shapes.length).fill(0);
@@ -147,22 +157,30 @@ const Avatar: React.FC<{
 
   const setBlendShapes = (shapes: string[], values: number[]) => {
     Object.entries(morphTargetMeshesRef.current).forEach(([meshName, mesh]) => {
-      shapes.forEach((shape, index) => {
-        const morphIndex = mesh.morphTargetDictionary?.[shape];
-        if (morphIndex !== undefined && mesh.morphTargetInfluences) {
-          if (meshName === 'Wolf3D_Teeth') {
-            // For teeth, only apply certain visemes and use a smaller multiplier
-            if (['viseme_aa', 'viseme_E', 'viseme_O'].includes(shape)) {
-              mesh.morphTargetInfluences[morphIndex] = values[index] * 0.6;
-            } else {
-              mesh.morphTargetInfluences[morphIndex] = 0;
+      if (meshName === 'Wolf3D_Teeth') {
+        // For teeth, only use 'mouthOpen'
+        const mouthOpenIndex = mesh.morphTargetDictionary?.['mouthOpen'];
+        if (mouthOpenIndex !== undefined && mesh.morphTargetInfluences) {
+          let mouthOpenValue = 0;
+          shapes.forEach((shape, index) => {
+            if (teethMovingVisemes.includes(shape)) {
+              mouthOpenValue = Math.max(mouthOpenValue, values[index]);
             }
-          } else {
-            // For other meshes, apply all visemes normally
+          });
+          mesh.morphTargetInfluences[mouthOpenIndex] = mouthOpenValue * 1;
+          console.log(`Teeth 'mouthOpen' set to: ${mouthOpenValue * 1}`);
+        } else {
+          console.warn("'mouthOpen' morph target not found for teeth");
+        }
+      } else {
+        // For other meshes, apply all visemes normally
+        shapes.forEach((shape, index) => {
+          const morphIndex = mesh.morphTargetDictionary?.[shape];
+          if (morphIndex !== undefined && mesh.morphTargetInfluences) {
             mesh.morphTargetInfluences[morphIndex] = values[index] * 0.6;
           }
-        }
-      });
+        });
+      }
     });
   };
 
@@ -189,7 +207,7 @@ const Avatar: React.FC<{
     }
 
     // Interpolate between current and target values
-    lerpFactorRef.current = Math.min(lerpFactorRef.current + delta * 5, 1);  // Adjust this value for smoother or faster transitions, might add a delay to the animation so dont go too high or above 15
+    lerpFactorRef.current = Math.min(lerpFactorRef.current + delta * 5, 1);  // Adjust this value for smoother or faster transitions
     const shapes = Object.keys(targetValuesRef.current);
     const values = shapes.map(shape => {
       const current = currentValuesRef.current[shape] || 0;

@@ -164,7 +164,7 @@ const Character: React.FC = () => {
                 <shadowMaterial transparent opacity={0.1} />
               </mesh>
 
-              <OrbitControls enablePan={false} enableZoom={false} enableRotate={false} target={[0,1.4,0]} />
+              <OrbitControls enablePan={true} enableZoom={true} enableRotate={false} target={[0,1.4,0]} />
               <Environment preset="warehouse" />
             </Canvas>
           </Box>

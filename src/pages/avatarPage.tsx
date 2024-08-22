@@ -21,7 +21,7 @@ const AvatarPage: React.FC = () => {
 
       if (typeof event.data === 'string' && event.data.startsWith('https://models.readyplayer.me/')) {
         // Modify the URL to include morph targets
-        const modifiedUrl = `${event.data}?morphTargets=ARKit,Oculus Visemes`;
+        const modifiedUrl = `${event.data}?morphTargets=mouthOpen,Oculus Visemes`;
         setAvatarUrl(modifiedUrl);
         setShowAvatarCreator(false);
       } else if (event.data.eventName === 'v1.frame.ready') {
