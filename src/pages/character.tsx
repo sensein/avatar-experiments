@@ -1,3 +1,19 @@
+/**
+ * Copyright 2023 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Box, IconButton, Typography, Button } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
@@ -8,9 +24,6 @@ import useStyle, { COLORS } from './styles';
 import { useAvatar } from '../context/AvatarContext';
 import Avatar from '../components/Avatar';
 import AnimationPreview from '../components/AnimationPreview';
-import LipSyncControls from '../components/LipSyncControlPanel';
-
-const WEBSOCKET_SERVER_URL = process.env.REACT_APP_WEBSOCKET_SERVER_URL || 'ws://localhost:3001';
 
 const Character: React.FC = () => {
   const navigate = useNavigate();
@@ -20,11 +33,6 @@ const Character: React.FC = () => {
   const [currentLipsyncAudio, setCurrentLipsyncAudio] = useState<string | null>(null);
   const [isLipsyncPlaying, setIsLipsyncPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const [externalAnimationData, setExternalAnimationData] = useState<any>(null);
-  const [externalLipsyncData, setExternalLipsyncData] = useState<any>(null);
-  const [isStreamingAudio, setIsStreamingAudio] = useState(false);
-  const streamRef = useRef<MediaStream | null>(null);
 
   const animations = [
     '/animations/expression/F_Talking_Variations_001.glb',
@@ -43,53 +51,6 @@ const Character: React.FC = () => {
     '/audio/TestAudio3.mp3',
     '/audio/TestAudio4.mp3',
   ];
-
-  useEffect(() => {
-    // Set up WebSocket connection
-    wsRef.current = new WebSocket(WEBSOCKET_SERVER_URL);
-
-    wsRef.current.onopen = () => {
-      console.log('WebSocket connection established');
-    };
-
-    wsRef.current.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'animation') {
-        setExternalAnimationData(data);
-      } else if (data.type === 'lipsync') {
-        setExternalLipsyncData(data);
-        if (data.audioUrl) {
-          setCurrentLipsyncAudio(data.audioUrl);
-          setIsLipsyncPlaying(true);
-        }
-      } else if (data.type === 'audio') {
-        // Handle incoming audio data
-        if (audioRef.current) {
-          audioRef.current.src = data.audioUrl;
-          audioRef.current.play().catch(error => console.error('Error playing audio:', error));
-        }
-      }
-    };
-
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (externalAnimationData) {
-      setCurrentAnimation(externalAnimationData.animationUrl);
-    }
-  }, [externalAnimationData]);
 
   const handleSelectAnimation = (animationUrl: string) => {
     setCurrentAnimation(animationUrl);
@@ -121,45 +82,14 @@ const Character: React.FC = () => {
     }
   };
 
-  const handleStartAudioStream = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      setIsStreamingAudio(true);
-
-      // Initial setup for audio stream
-      console.log('Audio stream started and ready to be sent');
-
-      // Example: send audio data over WebSocket
-      const audioContext = new AudioContext();
-      const source = audioContext.createMediaStreamSource(stream);
-      const processor = audioContext.createScriptProcessor(1024, 1, 1);
-
-      source.connect(processor);
-      processor.connect(audioContext.destination);
-
-      processor.onaudioprocess = (e) => {
-        const left = e.inputBuffer.getChannelData(0);
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({
-            type: 'audioData',
-            data: Array.from(left)
-          }));
-        }
-      };
-    } catch (error) {
-      console.error('Error starting audio stream:', error);
-    }
-  };
-
-  const handleStopAudioStream = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    setIsStreamingAudio(false);
-    console.log('Audio stream stopped');
-  };
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+    };
+  }, []);
 
   return (
     <Box
@@ -290,7 +220,28 @@ const Character: React.FC = () => {
           alignItems: 'center',
         }}
       >
-
+        <Typography variant="h6" gutterBottom>
+          Lipsync Controls
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+          {lipsyncAudios.map((audioUrl, index) => (
+            <Button
+              key={index}
+              variant="contained"
+              onClick={() => handleLipsyncButtonClick(audioUrl)}
+              sx={{
+                borderRadius: '20px',
+                padding: '10px 20px',
+                backgroundColor: currentLipsyncAudio === audioUrl && isLipsyncPlaying ? '#4CAF50' : '#2196F3',
+                '&:hover': {
+                  backgroundColor: currentLipsyncAudio === audioUrl && isLipsyncPlaying ? '#45a049' : '#1976D2',
+                },
+              }}
+            >
+              {currentLipsyncAudio === audioUrl && isLipsyncPlaying ? 'Stop' : `Play Audio ${index + 1}`}
+            </Button>
+          ))}
+        </Box>
       </Box>
     </Box>
   );
