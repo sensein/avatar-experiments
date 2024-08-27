@@ -103,21 +103,35 @@ const Avatar: React.FC<AvatarProps> = ({ avatarUrl, currentAnimation, currentLip
   useEffect(() => {
     if (currentLipsyncAudio) {
       console.log('Loading lipsync data for:', currentLipsyncAudio);
-      const audioNumber = currentLipsyncAudio.match(/TestAudio(\d+)\.mp3/)?.[1];
-      const lipsyncDataFile = `/viseme/Viseme${audioNumber}.json`;
       
-      fetch(lipsyncDataFile)
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          return response.json();
-        })
-        .then(data => {
-          lipsyncDataRef.current = data;
-          console.log("Loaded lipsync data:", data);
-        })
-        .catch(error => console.error('Error loading lipsync data:', error));
+      // Check if the currentLipsyncAudio is a URL or a local file path
+      if (currentLipsyncAudio.startsWith('http') || currentLipsyncAudio.startsWith('blob')) {
+        // For external lipsync data
+        fetch(currentLipsyncAudio)
+          .then(response => response.json())
+          .then(data => {
+            lipsyncDataRef.current = data;
+            console.log("Loaded external lipsync data:", data);
+          })
+          .catch(error => console.error('Error loading external lipsync data:', error));
+      } else {
+        // For local lipsync data
+        const audioNumber = currentLipsyncAudio.match(/TestAudio(\d+)\.mp3/)?.[1];
+        const lipsyncDataFile = `/viseme/Viseme${audioNumber}.json`;
+        
+        fetch(lipsyncDataFile)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            lipsyncDataRef.current = data;
+            console.log("Loaded local lipsync data:", data);
+          })
+          .catch(error => console.error('Error loading local lipsync data:', error));
+      }
     }
   }, [currentLipsyncAudio]);
 
